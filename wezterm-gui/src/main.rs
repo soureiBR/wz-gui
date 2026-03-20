@@ -56,6 +56,7 @@ mod termwindow;
 mod unicode_names;
 mod uniforms;
 mod update;
+mod soureigate_auth;
 mod utilsprites;
 
 #[cfg(feature = "dhat-heap")]
@@ -1218,6 +1219,15 @@ fn run() -> anyhow::Result<()> {
     if let Some(value) = &config.default_ssh_auth_sock {
         std::env::set_var("SSH_AUTH_SOCK", value);
     }
+
+    // SoureiGate authentication (runs before GUI)
+    let _soureigate_session = match crate::soureigate_auth::authenticate() {
+        Ok(session) => session,
+        Err(e) => {
+            log::warn!("SoureiGate auth skipped: {}", e);
+            None
+        }
+    };
 
     let sub = match opts.cmd.as_ref().cloned() {
         Some(SubCommand::BlockingStart(start)) => {

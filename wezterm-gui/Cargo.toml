@@ -34,6 +34,7 @@ cc.workspace = true
 embed-resource.workspace = true
 
 [dependencies]
+soureigate-core = { path = "../soureigate-core" }
 anyhow.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true

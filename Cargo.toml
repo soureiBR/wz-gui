@@ -16,6 +16,7 @@ members = [
   "wezterm-ssh",
   "wezterm-surface",
   "wezterm-uds",
+  "soureigate-core",
 ]
 resolver = "2"
 exclude = [

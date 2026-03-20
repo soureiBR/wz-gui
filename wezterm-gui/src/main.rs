@@ -754,9 +754,6 @@ fn run_terminal_gui(opts: StartCommand, default_domain_name: Option<String>) -> 
         opts.workspace.as_deref(),
     )?;
 
-    // Register SoureiGate servers as SSH domains
-    crate::soureigate_auth::register_ssh_domains();
-
     // First, let's see if we can ask an already running wezterm to do this.
     // We must do this before we start the gui frontend as the scheduler
     // requirements are different.
@@ -1213,6 +1210,19 @@ fn run() -> anyhow::Result<()> {
     stats::Stats::init()?;
     let _saver = umask::UmaskSaver::new();
 
+    // SoureiGate authentication (runs before config loading so
+    // the generated .soureigate.lua is picked up by the config loader)
+    if let Err(e) = crate::soureigate_auth::authenticate() {
+        log::warn!("SoureiGate auth: {}", e);
+    }
+
+    // Generate Lua config from auth results (ssh_domains, launch_menu, etc.)
+    if crate::soureigate_auth::get_session().is_some() {
+        if let Err(e) = crate::soureigate_auth::generate_lua_config() {
+            log::warn!("SoureiGate config generation failed: {}", e);
+        }
+    }
+
     config::common_init(
         opts.config_file.as_ref(),
         &opts.config_override,
@@ -1221,11 +1231,6 @@ fn run() -> anyhow::Result<()> {
     let config = config::configuration();
     if let Some(value) = &config.default_ssh_auth_sock {
         std::env::set_var("SSH_AUTH_SOCK", value);
-    }
-
-    // SoureiGate authentication (runs before GUI)
-    if let Err(e) = crate::soureigate_auth::authenticate() {
-        log::warn!("SoureiGate auth: {}", e);
     }
 
     let sub = match opts.cmd.as_ref().cloned() {

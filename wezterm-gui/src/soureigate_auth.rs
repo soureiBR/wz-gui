@@ -100,67 +100,124 @@ pub fn authenticate() -> Result<()> {
     Ok(())
 }
 
-/// Register SoureiGate servers as SSH domains in the Mux.
-/// Call this AFTER the Mux is created.
-pub fn register_ssh_domains() {
-    let session = match get_session() {
-        Some(s) => s,
-        None => return,
-    };
+/// Generate `.soureigate.lua` config with server domains and launch menu.
+/// This writes to `~/.soureigate.lua` so the config loader picks it up.
+/// Must be called BEFORE `config::common_init()`.
+pub fn generate_lua_config() -> Result<PathBuf> {
+    let session = get_session()
+        .ok_or_else(|| anyhow::anyhow!("No SoureiGate session"))?;
 
-    let mux = mux::Mux::get();
+    let home_dir =
+        dirs_next::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot determine HOME dir"))?;
+    let config_path = home_dir.join(".soureigate.lua");
+
+    let total_servers: usize = session.categories.iter().map(|c| c.servers.len()).sum();
+
+    let mut lua = String::new();
+    lua.push_str("-- SoureiGate Configuration (auto-generated)\n");
+    lua.push_str("-- Do not edit manually -- regenerated on login\n\n");
+    lua.push_str("local wezterm = require 'wezterm'\n");
+    lua.push_str("local config = wezterm.config_builder()\n\n");
+
+    // Theme
+    lua.push_str("-- Theme: Catppuccin Mocha\n");
+    lua.push_str("config.color_scheme = 'Catppuccin Mocha'\n");
+    lua.push_str("config.window_background_opacity = 0.95\n");
+    lua.push_str("config.font_size = 13.0\n\n");
+
+    // Window title
+    lua.push_str("config.window_title = 'SoureiGate'\n\n");
+
+    // SSH domains
+    lua.push_str("-- SSH Domains (from Gate API)\n");
+    lua.push_str("config.ssh_domains = {\n");
 
     for category in &session.categories {
         for server in &category.servers {
-            let domain_name = format!("sg:{}", server.name);
+            let escaped_name = server.name.replace('\'', "\\'");
+            lua.push_str(&format!("  {{ -- {}\n", category.name));
+            lua.push_str(&format!("    name = 'sg:{}',\n", escaped_name));
+            lua.push_str(&format!(
+                "    remote_address = '{}:{}',\n",
+                server.host, server.port
+            ));
+            lua.push_str(&format!("    username = '{}',\n", server.user));
+            lua.push_str("    multiplexing = 'None',\n");
+            lua.push_str("    no_agent_auth = true,\n");
 
-            // Check if domain already exists
-            if mux.get_domain_by_name(&domain_name).is_some() {
-                continue;
-            }
-
-            // Build SSH options
-            let mut ssh_option = std::collections::HashMap::new();
-
-            // Add SSH key if available
             if let Some(ref key_path) = session.ssh_key_path {
-                ssh_option.insert(
-                    "identityfile".to_string(),
-                    key_path.to_string_lossy().to_string(),
+                // Escape backslashes for Windows paths in Lua
+                let escaped_path = key_path.to_string_lossy().replace('\\', "\\\\");
+                lua.push_str(&format!(
+                    "    ssh_option = {{ identityfile = '{}', stricthostkeychecking = 'no' }},\n",
+                    escaped_path
+                ));
+            } else {
+                lua.push_str(
+                    "    ssh_option = { stricthostkeychecking = 'no' },\n",
                 );
             }
 
-            // Disable strict host key checking for managed servers
-            ssh_option.insert("stricthostkeychecking".to_string(), "no".to_string());
-
-            let ssh_dom = config::SshDomain {
-                name: domain_name.clone(),
-                remote_address: format!("{}:{}", server.host, server.port),
-                username: Some(server.user.clone()),
-                multiplexing: config::SshMultiplexing::None,
-                ssh_option,
-                no_agent_auth: false,
-                connect_automatically: false,
-                ..Default::default()
-            };
-
-            match mux::ssh::RemoteSshDomain::with_ssh_domain(&ssh_dom) {
-                Ok(domain) => {
-                    let domain: std::sync::Arc<dyn mux::domain::Domain> =
-                        std::sync::Arc::new(domain);
-                    mux.add_domain(&domain);
-                    log::trace!("SoureiGate: registered domain '{}'", domain_name);
-                }
-                Err(e) => {
-                    log::warn!(
-                        "SoureiGate: failed to register domain '{}': {}",
-                        domain_name,
-                        e
-                    );
-                }
-            }
+            lua.push_str("  },\n");
         }
     }
+    lua.push_str("}\n\n");
 
-    log::info!("SoureiGate: registered SSH domains for all servers");
+    // Launch menu organized by category
+    lua.push_str("-- Launch Menu (Ctrl+Shift+L to open)\n");
+    lua.push_str("config.launch_menu = {\n");
+
+    for category in &session.categories {
+        for server in &category.servers {
+            let escaped_cat = category.name.replace('\'', "\\'");
+            let escaped_name = server.name.replace('\'', "\\'");
+            lua.push_str(&format!(
+                "  {{ label = '[{}] {}  ({}@{}:{})', domain = {{ DomainName = 'sg:{}' }} }},\n",
+                escaped_cat,
+                escaped_name,
+                server.user,
+                server.host,
+                server.port,
+                escaped_name,
+            ));
+        }
+    }
+    lua.push_str("}\n\n");
+
+    // Keybindings
+    lua.push_str("-- Keybindings\n");
+    lua.push_str("config.keys = {\n");
+    lua.push_str(
+        "  -- Ctrl+Shift+S: Show server launcher\n",
+    );
+    lua.push_str(
+        "  { key = 'S', mods = 'CTRL|SHIFT', action = wezterm.action.ShowLauncher },\n",
+    );
+    lua.push_str("  -- Ctrl+Shift+R: Reload config\n");
+    lua.push_str(
+        "  { key = 'R', mods = 'CTRL|SHIFT', action = wezterm.action.ReloadConfiguration },\n",
+    );
+    lua.push_str("}\n\n");
+
+    // Tab bar customization
+    lua.push_str("-- Tab bar\n");
+    lua.push_str("config.use_fancy_tab_bar = true\n");
+    lua.push_str("config.tab_bar_at_bottom = false\n");
+    lua.push_str("config.hide_tab_bar_if_only_one_tab = false\n\n");
+
+    // Right status showing SoureiGate info
+    lua.push_str("-- Status bar\n");
+    lua.push_str("wezterm.on('update-right-status', function(window, pane)\n");
+    lua.push_str(&format!(
+        "  window:set_right_status('SoureiGate | {} servers ')\n",
+        total_servers
+    ));
+    lua.push_str("end)\n\n");
+
+    lua.push_str("return config\n");
+
+    std::fs::write(&config_path, &lua)?;
+    log::info!("SoureiGate: generated config at {:?}", config_path);
+
+    Ok(config_path)
 }

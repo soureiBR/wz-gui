@@ -754,6 +754,9 @@ fn run_terminal_gui(opts: StartCommand, default_domain_name: Option<String>) -> 
         opts.workspace.as_deref(),
     )?;
 
+    // Register SoureiGate servers as SSH domains
+    crate::soureigate_auth::register_ssh_domains();
+
     // First, let's see if we can ask an already running wezterm to do this.
     // We must do this before we start the gui frontend as the scheduler
     // requirements are different.
@@ -1221,13 +1224,9 @@ fn run() -> anyhow::Result<()> {
     }
 
     // SoureiGate authentication (runs before GUI)
-    let _soureigate_session = match crate::soureigate_auth::authenticate() {
-        Ok(session) => session,
-        Err(e) => {
-            log::warn!("SoureiGate auth skipped: {}", e);
-            None
-        }
-    };
+    if let Err(e) = crate::soureigate_auth::authenticate() {
+        log::warn!("SoureiGate auth: {}", e);
+    }
 
     let sub = match opts.cmd.as_ref().cloned() {
         Some(SubCommand::BlockingStart(start)) => {

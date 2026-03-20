@@ -195,7 +195,7 @@ fn run() -> anyhow::Result<()> {
         "PWD",
         "SHLVL",
         "WEZTERM_PANE",
-        "WEZTERM_UNIX_SOCKET",
+        "SOUREIGATE_UNIX_SOCKET",
         "_",
     ] {
         std::env::remove_var(name);
@@ -310,7 +310,7 @@ mod ossl;
 pub fn spawn_listener() -> anyhow::Result<()> {
     let config = configuration();
     for unix_dom in &config.unix_domains {
-        std::env::set_var("WEZTERM_UNIX_SOCKET", unix_dom.socket_path());
+        std::env::set_var("SOUREIGATE_UNIX_SOCKET", unix_dom.socket_path());
         let mut listener = wezterm_mux_server_impl::local::LocalListener::with_domain(unix_dom)?;
         thread::spawn(move || {
             listener.run();

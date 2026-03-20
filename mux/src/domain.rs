@@ -476,8 +476,8 @@ impl LocalDomain {
         if let Some(dir) = command_dir {
             cmd.cwd(dir);
         }
-        if let Ok(sock) = std::env::var("WEZTERM_UNIX_SOCKET") {
-            cmd.env("WEZTERM_UNIX_SOCKET", sock);
+        if let Ok(sock) = std::env::var("SOUREIGATE_UNIX_SOCKET") {
+            cmd.env("SOUREIGATE_UNIX_SOCKET", sock);
         }
         cmd.env("WEZTERM_PANE", pane_id.to_string());
         if let Some(agent) = Mux::get().agent.as_ref() {

@@ -1223,7 +1223,7 @@ impl Client {
         prefer_mux: bool,
         class_name: &str,
     ) -> anyhow::Result<config::UnixDomain> {
-        match std::env::var_os("WEZTERM_UNIX_SOCKET") {
+        match std::env::var_os("SOUREIGATE_UNIX_SOCKET") {
             Some(path) if !path.is_empty() => Ok(config::UnixDomain {
                 socket_path: Some(path.into()),
                 ..Default::default()
@@ -1245,7 +1245,7 @@ impl Client {
                     .first()
                     .ok_or_else(|| {
                         anyhow!(
-                            "no default unix domain is configured and WEZTERM_UNIX_SOCKET \
+                            "no default unix domain is configured and SOUREIGATE_UNIX_SOCKET \
                              is not set in the environment"
                         )
                     })?

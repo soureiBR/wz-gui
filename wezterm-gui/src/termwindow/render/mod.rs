@@ -41,6 +41,7 @@ pub mod fancy_tab_bar;
 pub mod paint;
 pub mod pane;
 pub mod screen_line;
+pub mod sidebar;
 pub mod split;
 pub mod tab_bar;
 pub mod window_buttons;
@@ -391,7 +392,14 @@ impl crate::TermWindow {
             VerticalWindowContentAlignment::Bottom => vertical_gap,
         };
 
-        (padding_left + left_gap, padding_top + top_gap)
+        let mut final_left = padding_left + left_gap;
+
+        // SoureiGate sidebar shifts all terminal content to the right
+        if self.soureigate_sidebar_visible {
+            final_left += self.soureigate_sidebar_width;
+        }
+
+        (final_left, padding_top + top_gap)
     }
 
     fn resolve_lock_glyph(

@@ -463,6 +463,11 @@ pub struct TermWindow {
     gl: Option<Rc<glium::backend::Context>>,
     webgpu: Option<Rc<WebGpuState>>,
     config_subscription: Option<config::ConfigSubscription>,
+
+    /// SoureiGate sidebar width in pixels (0 = hidden)
+    pub soureigate_sidebar_width: f32,
+    /// SoureiGate sidebar visible
+    pub soureigate_sidebar_visible: bool,
 }
 
 impl TermWindow {
@@ -788,6 +793,8 @@ impl TermWindow {
             key_table_state: KeyTableState::default(),
             modal: RefCell::new(None),
             opengl_info: None,
+            soureigate_sidebar_width: 220.0,
+            soureigate_sidebar_visible: true,
         };
 
         let tw = Rc::new(RefCell::new(myself));

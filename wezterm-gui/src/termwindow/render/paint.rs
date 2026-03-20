@@ -246,6 +246,10 @@ impl crate::TermWindow {
             .context("filled_rectangle for window background")?;
         }
 
+        // SoureiGate sidebar (rendered above background, below panes)
+        self.paint_sidebar(&mut layers)
+            .context("paint_sidebar")?;
+
         for pos in panes {
             if pos.is_active {
                 self.update_text_cursor(&pos);

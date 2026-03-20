@@ -125,8 +125,10 @@ pub fn generate_lua_config() -> Result<PathBuf> {
     lua.push_str("config.window_background_opacity = 0.95\n");
     lua.push_str("config.font_size = 13.0\n\n");
 
-    // Window title
-    lua.push_str("config.window_title = 'SoureiGate'\n\n");
+    // Window title (set via event, not config field)
+    lua.push_str("wezterm.on('format-window-title', function(tab, pane, tabs, panes, config)\n");
+    lua.push_str("  return 'SoureiGate'\n");
+    lua.push_str("end)\n\n");
 
     // SSH domains
     lua.push_str("-- SSH Domains (from Gate API)\n");
@@ -164,21 +166,27 @@ pub fn generate_lua_config() -> Result<PathBuf> {
     lua.push_str("}\n\n");
 
     // Launch menu organized by category
-    lua.push_str("-- Launch Menu (Ctrl+Shift+L to open)\n");
+    lua.push_str("-- Launch Menu (Ctrl+Shift+S to open)\n");
     lua.push_str("config.launch_menu = {\n");
 
     for category in &session.categories {
         for server in &category.servers {
             let escaped_cat = category.name.replace('\'', "\\'");
             let escaped_name = server.name.replace('\'', "\\'");
+
+            // Build SSH command with key if available
+            let ssh_args = if let Some(ref key_path) = session.ssh_key_path {
+                let escaped_key = key_path.to_string_lossy().replace('\\', "\\\\");
+                format!("'ssh', '-i', '{}', '-p', '{}', '-o', 'StrictHostKeyChecking=no', '{}@{}'",
+                    escaped_key, server.port, server.user, server.host)
+            } else {
+                format!("'ssh', '-p', '{}', '-o', 'StrictHostKeyChecking=no', '{}@{}'",
+                    server.port, server.user, server.host)
+            };
+
             lua.push_str(&format!(
-                "  {{ label = '[{}] {}  ({}@{}:{})', domain = {{ DomainName = 'sg:{}' }} }},\n",
-                escaped_cat,
-                escaped_name,
-                server.user,
-                server.host,
-                server.port,
-                escaped_name,
+                "  {{ label = '[{}] {}  ({}@{}:{})', args = {{ {} }} }},\n",
+                escaped_cat, escaped_name, server.user, server.host, server.port, ssh_args,
             ));
         }
     }
@@ -203,7 +211,7 @@ pub fn generate_lua_config() -> Result<PathBuf> {
     lua.push_str("-- Tab bar\n");
     lua.push_str("config.use_fancy_tab_bar = true\n");
     lua.push_str("config.tab_bar_at_bottom = false\n");
-    lua.push_str("config.hide_tab_bar_if_only_one_tab = false\n\n");
+    lua.push_str("\n");
 
     // Right status showing SoureiGate info
     lua.push_str("-- Status bar\n");

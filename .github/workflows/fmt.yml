@@ -1,32 +1,9 @@
-name: fmt
-
-on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "**/*.rs"
-      - ".github/workflows/fmt.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "**/*.rs"
-      - ".github/workflows/fmt.yml"
-
+# Disabled workflow - fork does not need CI/CD
+name: "fmt"
+on: workflow_dispatch
 jobs:
-  check-code-formatting:
+  disabled:
     runs-on: ubuntu-latest
+    if: false
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: "Install Rust"
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt
-      - name: Build
-        run: |
-          source $HOME/.cargo/env
-          cargo +nightly fmt --all -- --check
-
-
+      - run: echo "disabled"

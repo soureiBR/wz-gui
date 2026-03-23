@@ -796,7 +796,7 @@ impl TermWindow {
             key_table_state: KeyTableState::default(),
             modal: RefCell::new(None),
             opengl_info: None,
-            soureigate_sidebar_width: 220.0,
+            soureigate_sidebar_width: 280.0,
             soureigate_sidebar_visible: true,
             soureigate_collapsed: std::collections::HashSet::new(),
         };

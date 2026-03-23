@@ -1,17 +1,34 @@
 //! SoureiGate sidebar rendering
 //!
-//! Renders a sidebar panel on the left side of the terminal window
-//! showing server categories and servers from the SoureiGate session.
-//! Categories are collapsible dropdowns — click to expand/collapse.
+//! Renders a styled sidebar panel on the left side of the terminal window
+//! showing server categories (collapsible) and servers with status indicators.
 
 use crate::quad::TripleLayerQuadAllocator;
 use crate::termwindow::render::RenderScreenLineParams;
 use crate::termwindow::{UIItem, UIItemType};
 use mux::renderable::RenderableDimensions;
 use termwiz::cell::{CellAttributes, Intensity};
+use termwiz::color::SrgbaTuple;
 use termwiz::surface::Line;
 use wezterm_term::color::ColorAttribute;
 use window::color::LinearRgba;
+
+// ── Catppuccin Mocha palette ──────────────────────────────────────────
+const LAVENDER: SrgbaTuple = SrgbaTuple(180.0 / 255.0, 190.0 / 255.0, 254.0 / 255.0, 1.0);
+const BLUE: SrgbaTuple = SrgbaTuple(137.0 / 255.0, 180.0 / 255.0, 250.0 / 255.0, 1.0);
+const MAUVE: SrgbaTuple = SrgbaTuple(203.0 / 255.0, 166.0 / 255.0, 247.0 / 255.0, 1.0);
+const PEACH: SrgbaTuple = SrgbaTuple(250.0 / 255.0, 179.0 / 255.0, 135.0 / 255.0, 1.0);
+const TEAL: SrgbaTuple = SrgbaTuple(148.0 / 255.0, 226.0 / 255.0, 213.0 / 255.0, 1.0);
+const YELLOW: SrgbaTuple = SrgbaTuple(249.0 / 255.0, 226.0 / 255.0, 175.0 / 255.0, 1.0);
+const GREEN: SrgbaTuple = SrgbaTuple(166.0 / 255.0, 227.0 / 255.0, 161.0 / 255.0, 1.0);
+const RED: SrgbaTuple = SrgbaTuple(243.0 / 255.0, 139.0 / 255.0, 168.0 / 255.0, 1.0);
+const TEXT: SrgbaTuple = SrgbaTuple(205.0 / 255.0, 214.0 / 255.0, 244.0 / 255.0, 1.0);
+const SUBTEXT0: SrgbaTuple = SrgbaTuple(166.0 / 255.0, 173.0 / 255.0, 200.0 / 255.0, 1.0);
+const OVERLAY0: SrgbaTuple = SrgbaTuple(108.0 / 255.0, 112.0 / 255.0, 134.0 / 255.0, 1.0);
+const SURFACE1: SrgbaTuple = SrgbaTuple(69.0 / 255.0, 71.0 / 255.0, 90.0 / 255.0, 1.0);
+const SURFACE0: SrgbaTuple = SrgbaTuple(49.0 / 255.0, 50.0 / 255.0, 68.0 / 255.0, 1.0);
+const MANTLE: SrgbaTuple = SrgbaTuple(24.0 / 255.0, 24.0 / 255.0, 37.0 / 255.0, 1.0);
+const CRUST: SrgbaTuple = SrgbaTuple(17.0 / 255.0, 17.0 / 255.0, 27.0 / 255.0, 1.0);
 
 /// Tracks the type of each rendered sidebar row for hit-testing
 enum SidebarRow {
@@ -45,11 +62,9 @@ impl super::super::TermWindow {
         let cell_width = self.render_metrics.cell_size.width as f32;
         let max_cols = ((sidebar_width - 4.0) / cell_width) as usize;
 
-        // Colors
-        let bg_color =
-            LinearRgba::with_components(17.0 / 255.0, 17.0 / 255.0, 27.0 / 255.0, 1.0);
-        let sep_color =
-            LinearRgba::with_components(69.0 / 255.0, 71.0 / 255.0, 90.0 / 255.0, 1.0);
+        // Background colors
+        let bg_color = LinearRgba::with_components(CRUST.0, CRUST.1, CRUST.2, 1.0);
+        let sep_color = LinearRgba::with_components(SURFACE1.0, SURFACE1.1, SURFACE1.2, 1.0);
 
         // Sidebar background
         self.filled_rectangle(
@@ -59,7 +74,7 @@ impl super::super::TermWindow {
             bg_color,
         )?;
 
-        // Separator line
+        // Right edge separator line
         self.filled_rectangle(
             layers,
             1,
@@ -73,19 +88,29 @@ impl super::super::TermWindow {
         let mut row_types: Vec<SidebarRow> = Vec::new();
 
         if let Some(session) = session {
-            // Title line
+            // ── Title ──
             lines.push(Line::from_text(
-                &pad_to("  SoureiGate", max_cols),
-                &title_attr(),
+                &pad_to("  \u{25C7} SoureiGate", max_cols),
+                &make_attr(LAVENDER, MANTLE, true),
                 termwiz::surface::SEQ_ZERO,
                 None,
             ));
             row_types.push(SidebarRow::Static);
 
-            // Empty separator
+            // Title underline separator
+            let sep_text = format!("  {}", "\u{2500}".repeat(max_cols.saturating_sub(3)));
+            lines.push(Line::from_text(
+                &pad_to(&sep_text, max_cols),
+                &make_attr(SURFACE1, CRUST, false),
+                termwiz::surface::SEQ_ZERO,
+                None,
+            ));
+            row_types.push(SidebarRow::Static);
+
+            // Empty line after title
             lines.push(Line::from_text(
                 &pad_to("", max_cols),
-                &default_attr(),
+                &make_attr(OVERLAY0, CRUST, false),
                 termwiz::surface::SEQ_ZERO,
                 None,
             ));
@@ -93,40 +118,126 @@ impl super::super::TermWindow {
 
             for (cat_idx, category) in session.categories.iter().enumerate() {
                 let is_collapsed = self.soureigate_collapsed.contains(&cat_idx);
-                let arrow = if is_collapsed { "\u{25B6}" } else { "\u{25BC}" };
+                let arrow = if is_collapsed { "\u{25B8}" } else { "\u{25BE}" };
+                let type_icon_color = type_color(&category.name);
 
-                // Category header with dropdown indicator
-                let header = format!(
-                    " {} {} ({})",
-                    arrow,
-                    category.name,
-                    category.servers.len()
+                // Count online servers
+                let online = category
+                    .servers
+                    .iter()
+                    .filter(|s| {
+                        matches!(
+                            s.status.to_lowercase().as_str(),
+                            "online" | "active" | "running"
+                        )
+                    })
+                    .count();
+                let total = category.servers.len();
+
+                // Category header: " ▾ ▪ Name (online/total)"
+                // Build with mixed colors using set_cell_grapheme
+                let count_str = format!("{}/{}", online, total);
+                let count_color = if total == 0 {
+                    OVERLAY0
+                } else if online == total {
+                    GREEN
+                } else if online > 0 {
+                    YELLOW
+                } else {
+                    RED
+                };
+
+                let header_text = format!(
+                    " {} \u{25AA} {} ({})",
+                    arrow, category.name, count_str,
                 );
-                lines.push(Line::from_text(
-                    &pad_to(&header, max_cols),
-                    &category_attr(),
+
+                // Start with category bg, then override specific cells
+                let mut line = Line::from_text(
+                    &pad_to(&header_text, max_cols),
+                    &make_attr(BLUE, SURFACE0, true),
                     termwiz::surface::SEQ_ZERO,
                     None,
-                ));
+                );
+
+                // Color the type icon (▪ at position 3)
+                let chars: Vec<char> = header_text.chars().collect();
+                if let Some(icon_pos) = chars.iter().position(|c| *c == '\u{25AA}') {
+                    line.set_cell_grapheme(
+                        icon_pos,
+                        "\u{25AA}",
+                        1,
+                        make_attr(type_icon_color, SURFACE0, true),
+                        termwiz::surface::SEQ_ZERO,
+                    );
+                }
+
+                // Color the count
+                let count_start = header_text.rfind('(').map(|p| {
+                    header_text[..p].chars().count()
+                });
+                if let Some(start) = count_start {
+                    let count_part = format!("({})", count_str);
+                    for (i, ch) in count_part.chars().enumerate() {
+                        line.set_cell_grapheme(
+                            start + i,
+                            &ch.to_string(),
+                            1,
+                            make_attr(count_color, SURFACE0, false),
+                            termwiz::surface::SEQ_ZERO,
+                        );
+                    }
+                }
+
+                lines.push(line);
                 row_types.push(SidebarRow::Category(cat_idx));
 
                 // Server items (only if expanded)
                 if !is_collapsed {
                     for (srv_idx, server) in category.servers.iter().enumerate() {
-                        let label = format!("   {}", server.name);
-                        lines.push(Line::from_text(
-                            &pad_to(&label, max_cols),
-                            &server_attr(),
+                        let dot_color = status_color(&server.status);
+                        let server_text = format!("   \u{25CF} {}", server.name);
+
+                        let mut line = Line::from_text(
+                            &pad_to(&server_text, max_cols),
+                            &make_attr(SUBTEXT0, CRUST, false),
                             termwiz::surface::SEQ_ZERO,
                             None,
-                        ));
+                        );
+
+                        // Color the status dot (● at position 3)
+                        line.set_cell_grapheme(
+                            3,
+                            "\u{25CF}",
+                            1,
+                            make_attr(dot_color, CRUST, false),
+                            termwiz::surface::SEQ_ZERO,
+                        );
+
+                        // Server name in brighter color
+                        let name_start = 5; // "   ● " = 5 chars
+                        for (i, ch) in server.name.chars().enumerate() {
+                            if name_start + i < max_cols {
+                                line.set_cell_grapheme(
+                                    name_start + i,
+                                    &ch.to_string(),
+                                    1,
+                                    make_attr(TEXT, CRUST, false),
+                                    termwiz::surface::SEQ_ZERO,
+                                );
+                            }
+                        }
+
+                        lines.push(line);
                         row_types.push(SidebarRow::Server { cat_idx, srv_idx });
                     }
 
-                    // Gap after expanded category
+                    // Dashed separator after expanded category
+                    let dash = "\u{2500} ".repeat((max_cols.saturating_sub(2)) / 2);
+                    let sep = format!("  {}", dash);
                     lines.push(Line::from_text(
-                        &pad_to("", max_cols),
-                        &default_attr(),
+                        &pad_to(&sep, max_cols),
+                        &make_attr(SURFACE0, CRUST, false),
                         termwiz::surface::SEQ_ZERO,
                         None,
                     ));
@@ -135,15 +246,31 @@ impl super::super::TermWindow {
             }
         } else {
             lines.push(Line::from_text(
-                &pad_to("  No servers", max_cols),
-                &default_attr(),
+                &pad_to("  \u{25C7} SoureiGate", max_cols),
+                &make_attr(LAVENDER, MANTLE, true),
+                termwiz::surface::SEQ_ZERO,
+                None,
+            ));
+            row_types.push(SidebarRow::Static);
+
+            lines.push(Line::from_text(
+                &pad_to("", max_cols),
+                &make_attr(OVERLAY0, CRUST, false),
+                termwiz::surface::SEQ_ZERO,
+                None,
+            ));
+            row_types.push(SidebarRow::Static);
+
+            lines.push(Line::from_text(
+                &pad_to("  No servers connected", max_cols),
+                &make_attr(OVERLAY0, CRUST, false),
                 termwiz::surface::SEQ_ZERO,
                 None,
             ));
             row_types.push(SidebarRow::Static);
         }
 
-        // Render each line and register UIItems for interactive rows
+        // ── Render each line and register UIItems ──
         let palette = self.palette().clone();
         let window_is_transparent =
             !self.window_background.is_empty() || self.config.window_background_opacity != 1.0;
@@ -207,12 +334,7 @@ impl super::super::TermWindow {
                     },
                     config: &self.config,
                     cursor_border_color: LinearRgba::default(),
-                    foreground: LinearRgba::with_components(
-                        205.0 / 255.0,
-                        214.0 / 255.0,
-                        244.0 / 255.0,
-                        1.0,
-                    ),
+                    foreground: LinearRgba::with_components(TEXT.0, TEXT.1, TEXT.2, 1.0),
                     pane: None,
                     is_active: true,
                     selection_fg: LinearRgba::default(),
@@ -239,7 +361,9 @@ impl super::super::TermWindow {
     }
 }
 
-// Helper: pad or truncate string to fit sidebar width
+// ── Helper functions ──────────────────────────────────────────────────
+
+/// Pad or truncate string to fit sidebar width
 fn pad_to(s: &str, width: usize) -> String {
     let chars: Vec<char> = s.chars().collect();
     if chars.len() >= width {
@@ -251,49 +375,41 @@ fn pad_to(s: &str, width: usize) -> String {
     }
 }
 
-// Catppuccin Mocha color attributes
-fn title_attr() -> CellAttributes {
+/// Build CellAttributes with fg, bg, and optional bold
+fn make_attr(fg: SrgbaTuple, bg: SrgbaTuple, bold: bool) -> CellAttributes {
     let mut attr = CellAttributes::default();
-    attr.set_foreground(ColorAttribute::TrueColorWithDefaultFallback(
-        termwiz::color::SrgbaTuple(180.0 / 255.0, 190.0 / 255.0, 254.0 / 255.0, 1.0), // Lavender
-    ));
-    attr.set_background(ColorAttribute::TrueColorWithDefaultFallback(
-        termwiz::color::SrgbaTuple(24.0 / 255.0, 24.0 / 255.0, 37.0 / 255.0, 1.0), // Mantle
-    ));
-    attr.set_intensity(Intensity::Bold);
+    attr.set_foreground(ColorAttribute::TrueColorWithDefaultFallback(fg));
+    attr.set_background(ColorAttribute::TrueColorWithDefaultFallback(bg));
+    if bold {
+        attr.set_intensity(Intensity::Bold);
+    }
     attr
 }
 
-fn category_attr() -> CellAttributes {
-    let mut attr = CellAttributes::default();
-    attr.set_foreground(ColorAttribute::TrueColorWithDefaultFallback(
-        termwiz::color::SrgbaTuple(137.0 / 255.0, 180.0 / 255.0, 250.0 / 255.0, 1.0), // Blue
-    ));
-    attr.set_background(ColorAttribute::TrueColorWithDefaultFallback(
-        termwiz::color::SrgbaTuple(49.0 / 255.0, 50.0 / 255.0, 68.0 / 255.0, 1.0), // Surface0
-    ));
-    attr.set_intensity(Intensity::Bold);
-    attr
+/// Status color based on server status string
+fn status_color(status: &str) -> SrgbaTuple {
+    match status.to_lowercase().as_str() {
+        "online" | "active" | "running" => GREEN,
+        "pending" | "provisioning" | "deploying" => YELLOW,
+        "offline" | "stopped" | "error" | "failed" => RED,
+        _ => OVERLAY0,
+    }
 }
 
-fn server_attr() -> CellAttributes {
-    let mut attr = CellAttributes::default();
-    attr.set_foreground(ColorAttribute::TrueColorWithDefaultFallback(
-        termwiz::color::SrgbaTuple(205.0 / 255.0, 214.0 / 255.0, 244.0 / 255.0, 1.0), // Text
-    ));
-    attr.set_background(ColorAttribute::TrueColorWithDefaultFallback(
-        termwiz::color::SrgbaTuple(17.0 / 255.0, 17.0 / 255.0, 27.0 / 255.0, 1.0), // Crust
-    ));
-    attr
-}
-
-fn default_attr() -> CellAttributes {
-    let mut attr = CellAttributes::default();
-    attr.set_foreground(ColorAttribute::TrueColorWithDefaultFallback(
-        termwiz::color::SrgbaTuple(108.0 / 255.0, 112.0 / 255.0, 134.0 / 255.0, 1.0), // Overlay0
-    ));
-    attr.set_background(ColorAttribute::TrueColorWithDefaultFallback(
-        termwiz::color::SrgbaTuple(17.0 / 255.0, 17.0 / 255.0, 27.0 / 255.0, 1.0), // Crust
-    ));
-    attr
+/// Category type color based on category name
+fn type_color(name: &str) -> SrgbaTuple {
+    let lower = name.to_lowercase();
+    if lower.contains("pve") {
+        LAVENDER
+    } else if lower.contains("baremetal") || lower.contains("bm") {
+        PEACH
+    } else if lower.contains("pbs") || lower.contains("backup") {
+        TEAL
+    } else if lower.contains("monitor") {
+        YELLOW
+    } else if lower.contains("vm") {
+        MAUVE
+    } else {
+        BLUE
+    }
 }

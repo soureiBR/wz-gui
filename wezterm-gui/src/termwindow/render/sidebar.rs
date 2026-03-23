@@ -56,7 +56,13 @@ impl super::super::TermWindow {
             self.dimensions.pixel_height as f32 - sidebar_y - border.bottom.get() as f32;
         let cell_height = self.render_metrics.cell_size.height as f32;
         let cell_width = self.render_metrics.cell_size.width as f32;
-        let max_cols = ((sidebar_width - 4.0) / cell_width) as usize;
+
+        // Guard against zero/tiny cell dimensions during early init
+        if cell_width < 1.0 || cell_height < 1.0 || sidebar_h <= 0.0 {
+            return Ok(());
+        }
+
+        let max_cols = (((sidebar_width - 4.0) / cell_width) as usize).min(256);
 
         // Background colors
         let bg_color = LinearRgba::with_components(CRUST.0, CRUST.1, CRUST.2, 1.0);

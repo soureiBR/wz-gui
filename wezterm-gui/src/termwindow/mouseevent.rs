@@ -43,7 +43,9 @@ impl super::TermWindow {
             | UIItemType::AboveScrollThumb
             | UIItemType::BelowScrollThumb
             | UIItemType::ScrollThumb
-            | UIItemType::Split(_) => {}
+            | UIItemType::Split(_)
+            | UIItemType::SidebarCategory(_)
+            | UIItemType::SidebarServer { .. } => {}
         }
     }
 
@@ -54,7 +56,9 @@ impl super::TermWindow {
             | UIItemType::AboveScrollThumb
             | UIItemType::BelowScrollThumb
             | UIItemType::ScrollThumb
-            | UIItemType::Split(_) => {}
+            | UIItemType::Split(_)
+            | UIItemType::SidebarServer { .. } => {}
+            UIItemType::SidebarCategory(_) => {}
         }
     }
 
@@ -381,6 +385,18 @@ impl super::TermWindow {
             }
             UIItemType::CloseTab(idx) => {
                 self.mouse_event_close_tab(idx, event, context);
+            }
+            UIItemType::SidebarCategory(idx) => {
+                context.set_cursor(Some(MouseCursor::Hand));
+                if matches!(event.kind, WMEK::Press(MousePress::Left)) {
+                    if !self.soureigate_collapsed.remove(&idx) {
+                        self.soureigate_collapsed.insert(idx);
+                    }
+                    context.invalidate();
+                }
+            }
+            UIItemType::SidebarServer { .. } => {
+                context.set_cursor(Some(MouseCursor::Arrow));
             }
         }
     }

@@ -159,6 +159,8 @@ pub enum UIItemType {
     ScrollThumb,
     BelowScrollThumb,
     Split(PositionedSplit),
+    SidebarCategory(usize),
+    SidebarServer { cat_idx: usize, srv_idx: usize },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -468,6 +470,7 @@ pub struct TermWindow {
     pub soureigate_sidebar_width: f32,
     /// SoureiGate sidebar visible
     pub soureigate_sidebar_visible: bool,
+    pub soureigate_collapsed: std::collections::HashSet<usize>,
 }
 
 impl TermWindow {
@@ -795,6 +798,7 @@ impl TermWindow {
             opengl_info: None,
             soureigate_sidebar_width: 220.0,
             soureigate_sidebar_visible: true,
+            soureigate_collapsed: std::collections::HashSet::new(),
         };
 
         let tw = Rc::new(RefCell::new(myself));

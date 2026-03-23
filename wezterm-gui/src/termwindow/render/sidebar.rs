@@ -2,14 +2,23 @@
 //!
 //! Renders a sidebar panel on the left side of the terminal window
 //! showing server categories and servers from the SoureiGate session.
+//! Categories are collapsible dropdowns — click to expand/collapse.
 
 use crate::quad::TripleLayerQuadAllocator;
 use crate::termwindow::render::RenderScreenLineParams;
+use crate::termwindow::{UIItem, UIItemType};
 use mux::renderable::RenderableDimensions;
 use termwiz::cell::{CellAttributes, Intensity};
 use termwiz::surface::Line;
 use wezterm_term::color::ColorAttribute;
 use window::color::LinearRgba;
+
+/// Tracks the type of each rendered sidebar row for hit-testing
+enum SidebarRow {
+    Category(usize),
+    Server { cat_idx: usize, srv_idx: usize },
+    Static,
+}
 
 impl super::super::TermWindow {
     pub fn paint_sidebar(
@@ -61,16 +70,17 @@ impl super::super::TermWindow {
         // Build lines for each sidebar row
         let session = crate::soureigate_auth::get_session();
         let mut lines: Vec<Line> = Vec::new();
+        let mut row_types: Vec<SidebarRow> = Vec::new();
 
         if let Some(session) = session {
             // Title line
-            let title_line = Line::from_text(
+            lines.push(Line::from_text(
                 &pad_to("  SoureiGate", max_cols),
                 &title_attr(),
                 termwiz::surface::SEQ_ZERO,
                 None,
-            );
-            lines.push(title_line);
+            ));
+            row_types.push(SidebarRow::Static);
 
             // Empty separator
             lines.push(Line::from_text(
@@ -79,35 +89,49 @@ impl super::super::TermWindow {
                 termwiz::surface::SEQ_ZERO,
                 None,
             ));
+            row_types.push(SidebarRow::Static);
 
-            for category in &session.categories {
-                // Category header
-                let header = format!(" {} ({})", category.name, category.servers.len());
+            for (cat_idx, category) in session.categories.iter().enumerate() {
+                let is_collapsed = self.soureigate_collapsed.contains(&cat_idx);
+                let arrow = if is_collapsed { "\u{25B6}" } else { "\u{25BC}" };
+
+                // Category header with dropdown indicator
+                let header = format!(
+                    " {} {} ({})",
+                    arrow,
+                    category.name,
+                    category.servers.len()
+                );
                 lines.push(Line::from_text(
                     &pad_to(&header, max_cols),
                     &category_attr(),
                     termwiz::surface::SEQ_ZERO,
                     None,
                 ));
+                row_types.push(SidebarRow::Category(cat_idx));
 
-                // Server items
-                for server in &category.servers {
-                    let label = format!("   {}", server.name);
+                // Server items (only if expanded)
+                if !is_collapsed {
+                    for (srv_idx, server) in category.servers.iter().enumerate() {
+                        let label = format!("   {}", server.name);
+                        lines.push(Line::from_text(
+                            &pad_to(&label, max_cols),
+                            &server_attr(),
+                            termwiz::surface::SEQ_ZERO,
+                            None,
+                        ));
+                        row_types.push(SidebarRow::Server { cat_idx, srv_idx });
+                    }
+
+                    // Gap after expanded category
                     lines.push(Line::from_text(
-                        &pad_to(&label, max_cols),
-                        &server_attr(),
+                        &pad_to("", max_cols),
+                        &default_attr(),
                         termwiz::surface::SEQ_ZERO,
                         None,
                     ));
+                    row_types.push(SidebarRow::Static);
                 }
-
-                // Gap after category
-                lines.push(Line::from_text(
-                    &pad_to("", max_cols),
-                    &default_attr(),
-                    termwiz::surface::SEQ_ZERO,
-                    None,
-                ));
             }
         } else {
             lines.push(Line::from_text(
@@ -116,9 +140,10 @@ impl super::super::TermWindow {
                 termwiz::surface::SEQ_ZERO,
                 None,
             ));
+            row_types.push(SidebarRow::Static);
         }
 
-        // Render each line using render_screen_line
+        // Render each line and register UIItems for interactive rows
         let palette = self.palette().clone();
         let window_is_transparent =
             !self.window_background.is_empty() || self.config.window_background_opacity != 1.0;
@@ -135,6 +160,29 @@ impl super::super::TermWindow {
             }
 
             let top_pixel_y = sidebar_y + (i as f32 * cell_height);
+
+            // Register UIItem for clickable rows
+            if let Some(row_type) = row_types.get(i) {
+                let item_type = match row_type {
+                    SidebarRow::Category(idx) => Some(UIItemType::SidebarCategory(*idx)),
+                    SidebarRow::Server { cat_idx, srv_idx } => {
+                        Some(UIItemType::SidebarServer {
+                            cat_idx: *cat_idx,
+                            srv_idx: *srv_idx,
+                        })
+                    }
+                    SidebarRow::Static => None,
+                };
+                if let Some(item_type) = item_type {
+                    self.ui_items.push(UIItem {
+                        x: sidebar_x as usize,
+                        y: top_pixel_y as usize,
+                        width: sidebar_width as usize,
+                        height: cell_height as usize,
+                        item_type,
+                    });
+                }
+            }
 
             self.render_screen_line(
                 RenderScreenLineParams {

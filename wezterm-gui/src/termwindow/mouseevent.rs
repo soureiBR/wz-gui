@@ -395,8 +395,24 @@ impl super::TermWindow {
                     context.invalidate();
                 }
             }
-            UIItemType::SidebarServer { .. } => {
-                context.set_cursor(Some(MouseCursor::Arrow));
+            UIItemType::SidebarServer { cat_idx, srv_idx } => {
+                context.set_cursor(Some(MouseCursor::Hand));
+                if matches!(event.kind, WMEK::Press(MousePress::Left)) {
+                    if let Some(LastMouseClick { streak: 2, .. }) =
+                        self.last_mouse_click.as_ref()
+                    {
+                        if let Some(session) = crate::soureigate_auth::get_session() {
+                            if let Some(cat) = session.categories.get(cat_idx) {
+                                if let Some(server) = cat.servers.get(srv_idx) {
+                                    let domain_name = format!("sg:{}", server.name);
+                                    self.spawn_tab(
+                                        &SpawnTabDomain::DomainName(domain_name),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

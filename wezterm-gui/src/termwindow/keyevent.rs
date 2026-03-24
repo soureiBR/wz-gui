@@ -428,6 +428,19 @@ impl super::TermWindow {
     }
 
     pub fn raw_key_event_impl(&mut self, key: RawKeyEvent, context: &dyn WindowOps) {
+        // SoureiGate: Ctrl+P opens server palette (works even with no panes)
+        if key.key_is_down && key.modifiers.contains(Modifiers::CTRL) {
+            let is_p = matches!(&key.key, KeyCode::Char('p') | KeyCode::Char('P'));
+            if is_p && crate::soureigate_auth::get_session().is_some() {
+                let modal =
+                    crate::termwindow::server_palette::ServerPalette::new();
+                self.set_modal(std::rc::Rc::new(modal));
+                context.invalidate();
+                key.set_handled();
+                return;
+            }
+        }
+
         // The leader key is a kind of modal modifier key.
         // It is allowed to be active for up to the leader timeout duration,
         // after which it auto-deactivates.
@@ -599,8 +612,8 @@ impl super::TermWindow {
     pub fn key_event_impl(&mut self, window_key: KeyEvent, context: &dyn WindowOps) {
         // SoureiGate: Ctrl+P opens server palette (works even with no panes)
         if window_key.key_is_down
-            && window_key.key == KeyCode::Char('p')
-            && window_key.modifiers == Modifiers::CTRL
+            && matches!(window_key.key, KeyCode::Char('p') | KeyCode::Char('P'))
+            && window_key.modifiers.contains(Modifiers::CTRL)
         {
             if crate::soureigate_auth::get_session().is_some() {
                 let modal =

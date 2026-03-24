@@ -161,6 +161,7 @@ pub enum UIItemType {
     Split(PositionedSplit),
     SidebarCategory(usize),
     SidebarServer { cat_idx: usize, srv_idx: usize },
+    SidebarStatic,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -471,6 +472,7 @@ pub struct TermWindow {
     /// SoureiGate sidebar visible
     pub soureigate_sidebar_visible: bool,
     pub soureigate_collapsed: std::collections::HashSet<usize>,
+    pub soureigate_sidebar_scroll_offset: usize,
 }
 
 impl TermWindow {
@@ -799,6 +801,7 @@ impl TermWindow {
             soureigate_sidebar_width: 280.0,
             soureigate_sidebar_visible: true,
             soureigate_collapsed: std::collections::HashSet::new(),
+            soureigate_sidebar_scroll_offset: 0,
         };
 
         let tw = Rc::new(RefCell::new(myself));

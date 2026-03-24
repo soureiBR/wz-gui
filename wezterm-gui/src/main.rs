@@ -490,7 +490,19 @@ async fn async_run_terminal_gui(
             trigger_and_log_gui_attached(MuxDomain(domain.domain_id())).await;
         }
     }
-    spawn_tab_in_domain_if_mux_is_empty(cmd, is_connecting, domain, opts.workspace).await
+    if crate::soureigate_auth::get_session().is_some() {
+        // SoureiGate mode: start with empty window (no tab),
+        // user picks a server from the sidebar to open their first tab
+        let mux = Mux::get();
+        if !have_panes_in_domain_and_ws(&mux.default_domain(), &None) {
+            let workspace = opts.workspace.clone();
+            let position = None;
+            let _window_id = *mux.new_empty_window(workspace, position);
+        }
+        Ok(())
+    } else {
+        spawn_tab_in_domain_if_mux_is_empty(cmd, is_connecting, domain, opts.workspace).await
+    }
 }
 
 #[derive(Debug)]

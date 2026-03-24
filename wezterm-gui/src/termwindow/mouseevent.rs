@@ -45,7 +45,8 @@ impl super::TermWindow {
             | UIItemType::ScrollThumb
             | UIItemType::Split(_)
             | UIItemType::SidebarCategory(_)
-            | UIItemType::SidebarServer { .. } => {}
+            | UIItemType::SidebarServer { .. }
+            | UIItemType::SidebarStatic => {}
         }
     }
 
@@ -57,17 +58,15 @@ impl super::TermWindow {
             | UIItemType::BelowScrollThumb
             | UIItemType::ScrollThumb
             | UIItemType::Split(_)
-            | UIItemType::SidebarServer { .. } => {}
+            | UIItemType::SidebarServer { .. }
+            | UIItemType::SidebarStatic => {}
             UIItemType::SidebarCategory(_) => {}
         }
     }
 
     pub fn mouse_event_impl(&mut self, event: MouseEvent, context: &dyn WindowOps) {
         log::trace!("{:?}", event);
-        let pane = match self.get_active_pane_or_overlay() {
-            Some(pane) => pane,
-            None => return,
-        };
+        let pane = self.get_active_pane_or_overlay();
 
         self.current_mouse_event.replace(event.clone());
 
@@ -95,7 +94,8 @@ impl super::TermWindow {
             .sub((padding_left + border.left.get() as f32) as isize)
             .max(0) as f32)
             / self.render_metrics.cell_size.width as f32;
-        let x = if !pane.is_mouse_grabbed() {
+        let mouse_grabbed = pane.as_ref().map_or(false, |p| p.is_mouse_grabbed());
+        let x = if !mouse_grabbed {
             // Round the x coordinate so that we're a bit more forgiving of
             // the horizontal position when selecting cells
             x.round()
@@ -224,23 +224,41 @@ impl super::TermWindow {
             if capture_mouse {
                 self.current_mouse_capture = Some(MouseCapture::UI);
             }
-            self.mouse_event_ui_item(item, pane, y, event, context);
-        } else if matches!(
-            self.current_mouse_capture,
-            None | Some(MouseCapture::TerminalPane(_))
-        ) {
-            self.mouse_event_terminal(
-                pane,
-                ClickPosition {
-                    column: x,
-                    row: y,
-                    x_pixel_offset,
-                    y_pixel_offset,
-                },
-                event,
-                context,
-                capture_mouse,
-            );
+            // Sidebar items work without a pane
+            match &item.item_type {
+                UIItemType::SidebarCategory(_)
+                | UIItemType::SidebarServer { .. }
+                | UIItemType::SidebarStatic => {
+                    if let Some(pane) = pane {
+                        self.mouse_event_ui_item(item, pane, y, event, context);
+                    } else {
+                        self.mouse_event_sidebar_only(item, event, context);
+                    }
+                }
+                _ => {
+                    if let Some(pane) = pane {
+                        self.mouse_event_ui_item(item, pane, y, event, context);
+                    }
+                }
+            }
+        } else if let Some(pane) = pane {
+            if matches!(
+                self.current_mouse_capture,
+                None | Some(MouseCapture::TerminalPane(_))
+            ) {
+                self.mouse_event_terminal(
+                    pane,
+                    ClickPosition {
+                        column: x,
+                        row: y,
+                        x_pixel_offset,
+                        y_pixel_offset,
+                    },
+                    event,
+                    context,
+                    capture_mouse,
+                );
+            }
         }
 
         if prior_ui_item != ui_item {
@@ -388,33 +406,124 @@ impl super::TermWindow {
             }
             UIItemType::SidebarCategory(idx) => {
                 context.set_cursor(Some(MouseCursor::Hand));
-                if matches!(event.kind, WMEK::Press(MousePress::Left)) {
-                    if !self.soureigate_collapsed.remove(&idx) {
-                        self.soureigate_collapsed.insert(idx);
+                match event.kind {
+                    WMEK::Press(MousePress::Left) => {
+                        if !self.soureigate_collapsed.remove(&idx) {
+                            self.soureigate_collapsed.insert(idx);
+                        }
+                        context.invalidate();
                     }
-                    context.invalidate();
+                    WMEK::VertWheel(amount) => {
+                        self.scroll_sidebar(amount, context);
+                    }
+                    _ => {}
                 }
             }
             UIItemType::SidebarServer { cat_idx, srv_idx } => {
                 context.set_cursor(Some(MouseCursor::Hand));
-                if matches!(event.kind, WMEK::Press(MousePress::Left)) {
-                    if let Some(LastMouseClick { streak: 2, .. }) =
-                        self.last_mouse_click.as_ref()
-                    {
-                        if let Some(session) = crate::soureigate_auth::get_session() {
-                            if let Some(cat) = session.categories.get(cat_idx) {
-                                if let Some(server) = cat.servers.get(srv_idx) {
-                                    let domain_name = format!("sg:{}", server.name);
-                                    self.spawn_tab(
-                                        &SpawnTabDomain::DomainName(domain_name),
-                                    );
+                match event.kind {
+                    WMEK::Press(MousePress::Left) => {
+                        if let Some(LastMouseClick { streak: 2, .. }) =
+                            self.last_mouse_click.as_ref()
+                        {
+                            if let Some(session) = crate::soureigate_auth::get_session() {
+                                if let Some(cat) = session.categories.get(cat_idx) {
+                                    if let Some(server) = cat.servers.get(srv_idx) {
+                                        let domain_name = format!("sg:{}", server.name);
+                                        self.spawn_tab(
+                                            &SpawnTabDomain::DomainName(domain_name),
+                                        );
+                                    }
                                 }
                             }
                         }
                     }
+                    WMEK::VertWheel(amount) => {
+                        self.scroll_sidebar(amount, context);
+                    }
+                    _ => {}
+                }
+            }
+            UIItemType::SidebarStatic => {
+                match event.kind {
+                    WMEK::VertWheel(amount) => {
+                        self.scroll_sidebar(amount, context);
+                    }
+                    _ => {}
                 }
             }
         }
+    }
+
+    /// Handle sidebar mouse events when no pane is active (zero-tab mode)
+    fn mouse_event_sidebar_only(
+        &mut self,
+        item: UIItem,
+        event: MouseEvent,
+        context: &dyn WindowOps,
+    ) {
+        self.last_ui_item.replace(item.clone());
+        match item.item_type {
+            UIItemType::SidebarCategory(idx) => {
+                context.set_cursor(Some(MouseCursor::Hand));
+                match event.kind {
+                    WMEK::Press(MousePress::Left) => {
+                        if !self.soureigate_collapsed.remove(&idx) {
+                            self.soureigate_collapsed.insert(idx);
+                        }
+                        context.invalidate();
+                    }
+                    WMEK::VertWheel(amount) => {
+                        self.scroll_sidebar(amount, context);
+                    }
+                    _ => {}
+                }
+            }
+            UIItemType::SidebarServer { cat_idx, srv_idx } => {
+                context.set_cursor(Some(MouseCursor::Hand));
+                match event.kind {
+                    WMEK::Press(MousePress::Left) => {
+                        if let Some(LastMouseClick { streak: 2, .. }) =
+                            self.last_mouse_click.as_ref()
+                        {
+                            if let Some(session) = crate::soureigate_auth::get_session() {
+                                if let Some(cat) = session.categories.get(cat_idx) {
+                                    if let Some(server) = cat.servers.get(srv_idx) {
+                                        let domain_name = format!("sg:{}", server.name);
+                                        self.spawn_tab(
+                                            &SpawnTabDomain::DomainName(domain_name),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    WMEK::VertWheel(amount) => {
+                        self.scroll_sidebar(amount, context);
+                    }
+                    _ => {}
+                }
+            }
+            UIItemType::SidebarStatic => {
+                if let WMEK::VertWheel(amount) = event.kind {
+                    self.scroll_sidebar(amount, context);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn scroll_sidebar(&mut self, amount: i16, context: &dyn WindowOps) {
+        if amount > 0 {
+            // Scroll up
+            self.soureigate_sidebar_scroll_offset = self
+                .soureigate_sidebar_scroll_offset
+                .saturating_sub(amount as usize);
+        } else {
+            // Scroll down
+            self.soureigate_sidebar_scroll_offset += (-amount) as usize;
+        }
+        context.invalidate();
     }
 
     pub fn mouse_event_close_tab(

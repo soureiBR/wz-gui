@@ -212,35 +212,39 @@ impl super::super::TermWindow {
         let default_bg = bg_color;
 
         let max_visible = (sidebar_h / cell_height) as usize;
+        let total_lines = lines.len();
+        let scroll_offset = self.soureigate_sidebar_scroll_offset
+            .min(total_lines.saturating_sub(max_visible));
+        // Sync clamped offset back to state
+        self.soureigate_sidebar_scroll_offset = scroll_offset;
 
-        for (i, line) in lines.iter().enumerate() {
-            if i >= max_visible {
+        for (i, line) in lines.iter().enumerate().skip(scroll_offset) {
+            let visible_idx = i - scroll_offset;
+            if visible_idx >= max_visible {
                 break;
             }
 
-            let top_pixel_y = sidebar_y + (i as f32 * cell_height);
+            let top_pixel_y = sidebar_y + (visible_idx as f32 * cell_height);
 
-            // Register UIItem for clickable rows
+            // Register UIItem for all rows (clickable + static for scroll)
             if let Some(row_type) = row_types.get(i) {
                 let item_type = match row_type {
-                    SidebarRow::Category(idx) => Some(UIItemType::SidebarCategory(*idx)),
+                    SidebarRow::Category(idx) => UIItemType::SidebarCategory(*idx),
                     SidebarRow::Server { cat_idx, srv_idx } => {
-                        Some(UIItemType::SidebarServer {
+                        UIItemType::SidebarServer {
                             cat_idx: *cat_idx,
                             srv_idx: *srv_idx,
-                        })
+                        }
                     }
-                    SidebarRow::Static => None,
+                    SidebarRow::Static => UIItemType::SidebarStatic,
                 };
-                if let Some(item_type) = item_type {
-                    self.ui_items.push(UIItem {
-                        x: sidebar_x as usize,
-                        y: top_pixel_y as usize,
-                        width: sidebar_width as usize,
-                        height: cell_height as usize,
-                        item_type,
-                    });
-                }
+                self.ui_items.push(UIItem {
+                    x: sidebar_x as usize,
+                    y: top_pixel_y as usize,
+                    width: sidebar_width as usize,
+                    height: cell_height as usize,
+                    item_type,
+                });
             }
 
             self.render_screen_line(

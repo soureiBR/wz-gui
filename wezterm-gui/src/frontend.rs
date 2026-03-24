@@ -151,13 +151,19 @@ impl GuiFrontEnd {
                 } => {}
                 MuxNotification::Empty => {
                     if config::configuration().quit_when_all_windows_are_closed {
-                        promise::spawn::spawn_into_main_thread(async move {
-                            if mux::activity::Activity::count() == 0 {
-                                log::trace!("Mux is now empty, terminate gui");
-                                Connection::get().unwrap().terminate_message_loop();
-                            }
-                        })
-                        .detach();
+                        // Don't quit if SoureiGate is active — the user may
+                        // have zero tabs but still wants the sidebar
+                        if crate::soureigate_auth::get_session().is_some() {
+                            log::trace!("Mux is empty but SoureiGate is active, keeping alive");
+                        } else {
+                            promise::spawn::spawn_into_main_thread(async move {
+                                if mux::activity::Activity::count() == 0 {
+                                    log::trace!("Mux is now empty, terminate gui");
+                                    Connection::get().unwrap().terminate_message_loop();
+                                }
+                            })
+                            .detach();
+                        }
                     }
                 }
                 MuxNotification::SaveToDownloads { name, data } => {

@@ -220,6 +220,11 @@ impl crate::TermWindow {
             }
         }
 
+        // When there are no panes (zero-tab mode), always paint the background
+        if panes.is_empty() {
+            paint_terminal_background = true;
+        }
+
         if paint_terminal_background {
             // Regular window background color
             let background = if panes.len() == 1 {
@@ -230,7 +235,7 @@ impl crate::TermWindow {
                 self.palette().background
             }
             .to_linear()
-            .mul_alpha(self.config.window_background_opacity);
+            .mul_alpha(if panes.is_empty() { 1.0 } else { self.config.window_background_opacity });
 
             self.filled_rectangle(
                 &mut layers,

@@ -914,7 +914,7 @@ impl Mux {
             };
             for (window_id, win) in windows.iter_mut() {
                 win.prune_dead_tabs(&live_tab_ids);
-                if win.is_empty() {
+                if win.is_empty() && !win.keep_alive() {
                     log::trace!("prune_dead_windows: window is now empty");
                     dead_windows.push(*window_id);
                 }
@@ -1018,6 +1018,7 @@ impl Mux {
 
     pub fn is_empty(&self) -> bool {
         self.panes.read().is_empty()
+            && !self.windows.read().values().any(|w| w.keep_alive())
     }
 
     pub fn is_workspace_empty(&self, workspace: &str) -> bool {

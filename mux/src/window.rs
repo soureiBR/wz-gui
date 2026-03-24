@@ -14,6 +14,9 @@ pub struct Window {
     workspace: String,
     title: String,
     initial_position: Option<GuiPosition>,
+    /// When true, this window is kept alive even with zero tabs
+    /// (e.g. SoureiGate sidebar-only mode)
+    keep_alive: bool,
 }
 
 impl Window {
@@ -26,7 +29,16 @@ impl Window {
             title: String::new(),
             workspace: workspace.unwrap_or_else(|| Mux::get().active_workspace()),
             initial_position,
+            keep_alive: false,
         }
+    }
+
+    pub fn set_keep_alive(&mut self, keep_alive: bool) {
+        self.keep_alive = keep_alive;
+    }
+
+    pub fn keep_alive(&self) -> bool {
+        self.keep_alive
     }
 
     pub fn get_initial_position(&self) -> &Option<GuiPosition> {

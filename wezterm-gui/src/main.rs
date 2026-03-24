@@ -497,7 +497,11 @@ async fn async_run_terminal_gui(
         if !have_panes_in_domain_and_ws(&mux.default_domain(), &None) {
             let workspace = opts.workspace.clone();
             let position = None;
-            let _window_id = *mux.new_empty_window(workspace, position);
+            let window_id = *mux.new_empty_window(workspace, position);
+            // Mark the window as keep_alive so it won't be pruned
+            if let Some(mut win) = mux.get_window_mut(window_id) {
+                win.set_keep_alive(true);
+            }
         }
         Ok(())
     } else {

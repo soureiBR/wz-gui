@@ -80,6 +80,7 @@ pub mod paneselect;
 mod prevcursor;
 pub mod render;
 pub mod resize;
+pub mod server_palette;
 mod selection;
 pub mod spawn;
 pub mod webgpu;
@@ -800,7 +801,15 @@ impl TermWindow {
             opengl_info: None,
             soureigate_sidebar_width: 280.0,
             soureigate_sidebar_visible: true,
-            soureigate_collapsed: std::collections::HashSet::new(),
+            soureigate_collapsed: {
+                let mut collapsed = std::collections::HashSet::new();
+                if let Some(session) = crate::soureigate_auth::get_session() {
+                    for i in 0..session.categories.len() {
+                        collapsed.insert(i);
+                    }
+                }
+                collapsed
+            },
             soureigate_sidebar_scroll_offset: 0,
         };
 

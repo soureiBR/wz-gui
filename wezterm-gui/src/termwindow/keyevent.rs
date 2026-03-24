@@ -597,6 +597,20 @@ impl super::TermWindow {
     }
 
     pub fn key_event_impl(&mut self, window_key: KeyEvent, context: &dyn WindowOps) {
+        // SoureiGate: Ctrl+P opens server palette (works even with no panes)
+        if window_key.key_is_down
+            && window_key.key == KeyCode::Char('p')
+            && window_key.modifiers == Modifiers::CTRL
+        {
+            if crate::soureigate_auth::get_session().is_some() {
+                let modal =
+                    crate::termwindow::server_palette::ServerPalette::new();
+                self.set_modal(std::rc::Rc::new(modal));
+                context.invalidate();
+                return;
+            }
+        }
+
         let pane = match self.get_active_pane_or_overlay() {
             Some(pane) => pane,
             None => return,

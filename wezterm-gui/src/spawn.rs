@@ -31,14 +31,6 @@ pub fn spawn_command_impl(
             spawn_command_internal(spawn, spawn_where, size, src_window_id, term_config).await
         {
             log::error!("Failed to spawn: {:#}", err);
-            // Also write to debug file for Windows GUI visibility
-            if let Ok(mut f) = std::fs::OpenOptions::new()
-                .create(true).append(true)
-                .open("soureigate-debug.log")
-            {
-                use std::io::Write;
-                let _ = writeln!(f, "Failed to spawn: {:#}", err);
-            }
         }
     })
     .detach();

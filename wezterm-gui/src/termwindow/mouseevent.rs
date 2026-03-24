@@ -27,11 +27,25 @@ impl super::TermWindow {
     fn resolve_ui_item(&self, event: &MouseEvent) -> Option<UIItem> {
         let x = event.coords.x;
         let y = event.coords.y;
-        self.ui_items
+        let result = self.ui_items
             .iter()
             .rev()
             .find(|item| item.hit_test(x, y))
-            .cloned()
+            .cloned();
+        if result.is_none() && matches!(event.kind, WMEK::Press(_)) {
+            log::info!(
+                "resolve_ui_item: MISS at pixel ({}, {}), {} ui_items registered",
+                x, y, self.ui_items.len()
+            );
+            // Log first few sidebar items for coordinate debugging
+            for item in self.ui_items.iter().take(5) {
+                log::info!(
+                    "  ui_item: type={:?} x={} y={} w={} h={}",
+                    item.item_type, item.x, item.y, item.width, item.height
+                );
+            }
+        }
+        result
     }
 
     fn leave_ui_item(&mut self, item: &UIItem) {
@@ -67,6 +81,17 @@ impl super::TermWindow {
     pub fn mouse_event_impl(&mut self, event: MouseEvent, context: &dyn WindowOps) {
         log::trace!("{:?}", event);
         let pane = self.get_active_pane_or_overlay();
+
+        if matches!(event.kind, WMEK::Press(_)) {
+            log::info!(
+                "mouse_event_impl: pane={}, ui_items={}, capture={:?}, coords=({},{})",
+                pane.is_some(),
+                self.ui_items.len(),
+                self.current_mouse_capture,
+                event.coords.x,
+                event.coords.y,
+            );
+        }
 
         self.current_mouse_event.replace(event.clone());
 
@@ -223,6 +248,12 @@ impl super::TermWindow {
         if let Some(item) = ui_item.clone() {
             if capture_mouse {
                 self.current_mouse_capture = Some(MouseCapture::UI);
+            }
+            if matches!(event.kind, WMEK::Press(_)) {
+                log::info!(
+                    "UI item HIT: {:?}, pane={}, event={:?}",
+                    item.item_type, pane.is_some(), event.kind
+                );
             }
             // Sidebar items work without a pane
             match &item.item_type {

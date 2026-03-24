@@ -293,6 +293,16 @@ impl super::super::TermWindow {
             )?;
         }
 
+        // Log sidebar UI items count for debugging
+        let sidebar_item_count = self.ui_items.iter().filter(|i| matches!(
+            i.item_type,
+            UIItemType::SidebarCategory(_) | UIItemType::SidebarServer { .. } | UIItemType::SidebarStatic
+        )).count();
+        log::info!(
+            "paint_sidebar: registered {} sidebar UIItems, total ui_items={}, sidebar_y={}, sidebar_h={}",
+            sidebar_item_count, self.ui_items.len(), sidebar_y, sidebar_h
+        );
+
         Ok(())
     }
 }

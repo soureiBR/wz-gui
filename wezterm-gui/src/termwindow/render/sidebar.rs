@@ -301,8 +301,9 @@ fn pad_to(s: &str, width: usize) -> String {
     if chars.len() >= width {
         chars[..width].iter().collect()
     } else {
+        let char_count = chars.len();
         let mut result: String = chars.into_iter().collect();
-        result.extend(std::iter::repeat(' ').take(width - result.len()));
+        result.extend(std::iter::repeat(' ').take(width - char_count));
         result
     }
 }

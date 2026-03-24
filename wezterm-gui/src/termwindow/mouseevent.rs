@@ -33,16 +33,21 @@ impl super::TermWindow {
             .find(|item| item.hit_test(x, y))
             .cloned();
         if result.is_none() && matches!(event.kind, WMEK::Press(_)) {
-            log::error!(
-                "resolve_ui_item: MISS at pixel ({}, {}), {} ui_items registered",
-                x, y, self.ui_items.len()
-            );
-            // Log first few sidebar items for coordinate debugging
-            for item in self.ui_items.iter().take(5) {
-                log::error!(
-                    "  ui_item: type={:?} x={} y={} w={} h={}",
-                    item.item_type, item.x, item.y, item.width, item.height
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true).append(true)
+                .open("soureigate-debug.log")
+            {
+                use std::io::Write;
+                let _ = writeln!(f,
+                    "resolve_ui_item: MISS at pixel ({}, {}), {} ui_items registered",
+                    x, y, self.ui_items.len()
                 );
+                for item in self.ui_items.iter().take(5) {
+                    let _ = writeln!(f,
+                        "  ui_item: type={:?} x={} y={} w={} h={}",
+                        item.item_type, item.x, item.y, item.width, item.height
+                    );
+                }
             }
         }
         result
@@ -83,14 +88,21 @@ impl super::TermWindow {
         let pane = self.get_active_pane_or_overlay();
 
         if matches!(event.kind, WMEK::Press(_)) {
-            log::error!(
-                "mouse_event_impl: pane={}, ui_items={}, capture={:?}, coords=({},{})",
-                pane.is_some(),
-                self.ui_items.len(),
-                self.current_mouse_capture,
-                event.coords.x,
-                event.coords.y,
-            );
+            // Write to a debug file since stderr may not be visible on Windows GUI
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true).append(true)
+                .open("soureigate-debug.log")
+            {
+                use std::io::Write;
+                let _ = writeln!(f,
+                    "mouse_event_impl: pane={}, ui_items={}, capture={:?}, coords=({},{})",
+                    pane.is_some(),
+                    self.ui_items.len(),
+                    self.current_mouse_capture,
+                    event.coords.x,
+                    event.coords.y,
+                );
+            }
         }
 
         self.current_mouse_event.replace(event.clone());
@@ -250,10 +262,16 @@ impl super::TermWindow {
                 self.current_mouse_capture = Some(MouseCapture::UI);
             }
             if matches!(event.kind, WMEK::Press(_)) {
-                log::error!(
-                    "UI item HIT: {:?}, pane={}, event={:?}",
-                    item.item_type, pane.is_some(), event.kind
-                );
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true).append(true)
+                    .open("soureigate-debug.log")
+                {
+                    use std::io::Write;
+                    let _ = writeln!(f,
+                        "UI item HIT: {:?}, pane={}",
+                        item.item_type, pane.is_some()
+                    );
+                }
             }
             // Sidebar items work without a pane
             match &item.item_type {

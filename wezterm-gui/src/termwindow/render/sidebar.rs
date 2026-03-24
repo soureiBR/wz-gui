@@ -298,7 +298,7 @@ impl super::super::TermWindow {
             i.item_type,
             UIItemType::SidebarCategory(_) | UIItemType::SidebarServer { .. } | UIItemType::SidebarStatic
         )).count();
-        log::info!(
+        log::error!(
             "paint_sidebar: registered {} sidebar UIItems, total ui_items={}, sidebar_y={}, sidebar_h={}",
             sidebar_item_count, self.ui_items.len(), sidebar_y, sidebar_h
         );

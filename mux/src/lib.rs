@@ -1327,17 +1327,19 @@ impl Mux {
             let window = self
                 .get_window_mut(window_id)
                 .ok_or_else(|| anyhow!("window_id {} not found on this server", window_id))?;
-            let tab = window
-                .get_active()
-                .ok_or_else(|| anyhow!("window {} has no tabs", window_id))?;
-            let pane = tab
-                .get_active_pane()
-                .ok_or_else(|| anyhow!("active tab in window {} has no panes", window_id))?;
-            term_config = pane.get_config();
-
-            let size = tab.get_size();
-
-            (window_id, size)
+            if let Some(tab) = window.get_active() {
+                let pane = tab
+                    .get_active_pane()
+                    .ok_or_else(|| anyhow!("active tab in window {} has no panes", window_id))?;
+                term_config = pane.get_config();
+                let size = tab.get_size();
+                (window_id, size)
+            } else {
+                // Window with no tabs (e.g. SoureiGate zero-tab mode)
+                // Use the size passed by the caller
+                term_config = None;
+                (window_id, size)
+            }
         } else {
             term_config = None;
             window_builder = self.new_empty_window(Some(workspace_for_new_window), window_position);
